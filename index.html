@@ -1,0 +1,941 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Type Vectors Diagnostic</title>
+    <!-- Tailwind for base layout and structure -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- OpenType.js for font parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/opentype.js@1.3.4/dist/opentype.min.js"></script>
+    <style>
+      :root {
+        --bg: #ffffff;
+        --text: #000000;
+        --sidebar-bg: #f8f8f8;
+        --border: #e0e0e0;
+        --yellow: #ffde21;
+        --node-stroke: #000000;
+        --metrics: #999999;
+        --sidebearings: #cccccc;
+      }
+
+      .dark-mode {
+        --bg: #000000;
+        --text: #ffffff;
+        --sidebar-bg: #111111;
+        --border: #333333;
+        --node-stroke: #000000; /* Nodes keep black stroke per spec */
+      }
+
+      body {
+        background-color: var(--bg);
+        color: var(--text);
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+        margin: 0;
+        height: 100vh;
+        display: flex;
+        overflow: hidden;
+        transition:
+          background-color 0.3s,
+          color 0.3s;
+      }
+
+      /* Sidebar Styling */
+      #sidebar {
+        width: 320px;
+        background-color: var(--sidebar-bg);
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        padding: 1.5rem;
+        box-sizing: border-box;
+        overflow-y: auto;
+        z-index: 10;
+      }
+
+      .input-group {
+        margin-bottom: 1.5rem;
+      }
+
+      .input-group label {
+        display: block;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.5rem;
+        color: var(--text);
+        opacity: 0.7;
+      }
+
+      input[type="text"] {
+        width: 100%;
+        padding: 0.75rem;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+        border-radius: 4px;
+        font-size: 1rem;
+      }
+
+      .drop-zone {
+        border: 2px dashed var(--border);
+        border-radius: 6px;
+        padding: 2rem 1rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        background: var(--bg);
+      }
+      .drop-zone:hover,
+      .drop-zone.dragover {
+        border-color: var(--yellow);
+        background: rgba(255, 222, 33, 0.1);
+      }
+
+      /* Toggles */
+      .case-toggles {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+      }
+      .case-toggles button {
+        flex: 1;
+        padding: 0.5rem;
+        font-size: 0.8rem;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .case-toggles button.active {
+        background: var(--yellow);
+        color: #000;
+        border-color: var(--yellow);
+        font-weight: bold;
+      }
+
+      .btn-primary {
+        background-color: var(--yellow);
+        color: #000;
+        font-weight: bold;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 1rem;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        width: 100%;
+        transition:
+          transform 0.1s,
+          box-shadow 0.1s;
+      }
+      .btn-primary:active {
+        transform: translateY(2px);
+      }
+      .btn-secondary {
+        background-color: transparent;
+        color: var(--text);
+        border: 1px solid var(--text);
+        padding: 0.75rem;
+        border-radius: 4px;
+        cursor: pointer;
+        width: 100%;
+        font-weight: 600;
+        margin-top: 1rem;
+      }
+
+      /* Layer Toggles */
+      .layer-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+      }
+      .layer-toggle {
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        font-size: 0.9rem;
+      }
+      .layer-toggle input {
+        margin-right: 0.75rem;
+        accent-color: var(--yellow);
+        width: 16px;
+        height: 16px;
+      }
+
+      /* Main Viewport */
+      #viewport {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        position: relative;
+      }
+
+      #empty-state {
+        text-align: center;
+        opacity: 0.5;
+        font-size: 1.2rem;
+      }
+
+      /* SVG Styles */
+      svg {
+        width: 100%;
+        height: 100%;
+        max-height: 100%;
+        overflow: visible;
+      }
+
+      /* Layer Specifics (Controlled by CSS Variables & Classes) */
+      .layer-hidden {
+        display: none !important;
+      }
+
+      .fill-preview path {
+        fill: var(--text);
+        stroke: none;
+      }
+
+      .outlines path {
+        fill: none;
+        stroke: var(--text);
+        stroke-width: 1px;
+        vector-effect: non-scaling-stroke;
+      }
+
+      .smooth-nodes circle {
+        fill: var(--yellow);
+        stroke: var(--node-stroke);
+        stroke-width: 1px;
+        vector-effect: non-scaling-stroke;
+      }
+
+      .tangent-nodes polygon {
+        fill: var(--yellow);
+        stroke: var(--node-stroke);
+        stroke-width: 1px;
+        vector-effect: non-scaling-stroke;
+      }
+
+      .corner-nodes rect {
+        fill: var(--yellow);
+        stroke: var(--node-stroke);
+        stroke-width: 1px;
+        vector-effect: non-scaling-stroke;
+      }
+
+      .handle-bars line {
+        stroke: var(--text);
+        stroke-width: 1px;
+        vector-effect: non-scaling-stroke;
+        opacity: 0.6;
+      }
+
+      .off-curve path {
+        fill: none;
+        stroke: var(--text);
+        stroke-width: 1px;
+        vector-effect: non-scaling-stroke;
+      }
+
+      .metrics line {
+        stroke: var(--metrics);
+        stroke-width: 1px;
+        vector-effect: non-scaling-stroke;
+      }
+
+      .sidebearings line {
+        stroke: var(--sidebearings);
+        stroke-width: 1px;
+        vector-effect: non-scaling-stroke;
+      }
+
+      .metric-label {
+        fill: var(--metrics);
+        font-size: 14px;
+        font-family: monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <aside id="sidebar">
+      <div class="flex justify-between items-center mb-6">
+        <h1 class="font-bold text-xl tracking-tight">Type Vectors</h1>
+        <button
+          id="theme-toggle"
+          class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800"
+          title="Toggle Light/Dark Mode"
+        >
+          🌓
+        </button>
+      </div>
+
+      <div class="input-group">
+        <label>1. Load Font</label>
+        <div id="drop-zone" class="drop-zone">
+          <p class="text-sm">Drag & Drop .otf / .ttf<br />or click to browse</p>
+          <input
+            type="file"
+            id="font-file"
+            accept=".ttf,.otf,.woff"
+            class="hidden"
+          />
+        </div>
+        <p
+          id="font-name"
+          class="text-xs mt-2 text-center text-green-600 dark:text-green-400 font-medium hidden"
+        ></p>
+      </div>
+
+      <div class="input-group">
+        <label>2. Test Text</label>
+        <input
+          type="text"
+          id="text-input"
+          value="adhesion"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </div>
+
+      <div class="case-toggles">
+        <button id="btn-lower" class="active">aa</button>
+        <button id="btn-sentence">Aa</button>
+        <button id="btn-upper">AA</button>
+      </div>
+
+      <button id="btn-render" class="btn-primary mb-6">Show Vectors</button>
+
+      <div class="input-group">
+        <div class="flex justify-between items-center mb-2">
+          <label class="!mb-0">Layers</label>
+          <label
+            class="text-xs flex items-center cursor-pointer opacity-70 hover:opacity-100 transition-opacity"
+          >
+            <input
+              type="checkbox"
+              id="toggle-all-layers"
+              class="mr-1 accent-[var(--yellow)]"
+            />
+            Toggle All
+          </label>
+        </div>
+        <div class="layer-list">
+          <label class="layer-toggle"
+            ><input type="checkbox" checked data-target="fill-preview" /> Fill
+            Preview</label
+          >
+          <label class="layer-toggle"
+            ><input type="checkbox" data-target="outlines" /> Outlines</label
+          >
+          <label class="layer-toggle"
+            ><input type="checkbox" data-target="smooth-nodes" /> Smooth
+            Nodes</label
+          >
+          <label class="layer-toggle"
+            ><input type="checkbox" data-target="tangent-nodes" /> Tangent
+            Nodes</label
+          >
+          <label class="layer-toggle"
+            ><input type="checkbox" data-target="corner-nodes" /> Corner
+            Nodes</label
+          >
+          <label class="layer-toggle"
+            ><input type="checkbox" data-target="handle-bars" /> Handle
+            Bars</label
+          >
+          <label class="layer-toggle"
+            ><input type="checkbox" data-target="off-curve" /> Off-Curve
+            Points</label
+          >
+          <label class="layer-toggle"
+            ><input type="checkbox" data-target="metrics" /> Metrics</label
+          >
+          <label class="layer-toggle"
+            ><input type="checkbox" data-target="sidebearings" />
+            Sidebearings</label
+          >
+        </div>
+      </div>
+
+      <div class="mt-auto">
+        <button id="btn-download" class="btn-secondary">Download SVG</button>
+
+        <div
+          class="mt-8 pt-4 border-t border-[var(--border)] text-[0.65rem] leading-relaxed opacity-60"
+        >
+          <p class="font-bold mb-1">Type Vectors v0.2</p>
+          <p>
+            Designed by Pedro Amado (FBAUP / i2ADS / Ligatures) and developed by
+            Gemini Pro 3.1 in March 2026.
+          </p>
+          <p class="mt-1">
+            <a
+              href="https://github.com/pedamado/type-vectors"
+              target="_blank"
+              class="underline hover:text-[var(--text)]"
+              >More information</a
+            >
+          </p>
+        </div>
+      </div>
+    </aside>
+
+    <main id="viewport">
+      <div id="empty-state">
+        Please load a custom font to visualize its vector architecture.
+      </div>
+      <!-- SVG Canvas -->
+      <svg id="vector-canvas" class="hidden" xmlns="http://www.w3.org/2000/svg">
+        <!-- Layers will be injected here by JS in order of back to front -->
+        <g id="layer-fill-preview" class="fill-preview"></g>
+        <g id="layer-sidebearings" class="sidebearings"></g>
+        <g id="layer-metrics" class="metrics"></g>
+        <g id="layer-outlines" class="outlines"></g>
+        <g id="layer-handle-bars" class="handle-bars"></g>
+        <g id="layer-off-curve" class="off-curve"></g>
+        <g id="layer-smooth-nodes" class="smooth-nodes"></g>
+        <g id="layer-tangent-nodes" class="tangent-nodes"></g>
+        <g id="layer-corner-nodes" class="corner-nodes"></g>
+      </svg>
+    </main>
+
+    <script>
+      // Data & State
+      let currentFont = null;
+      let currentText = "adhesion";
+      let isVectorMode = false; // Starts in Fill mode
+
+      const testWords = [
+        "adhesion",
+        "shoplifter",
+        "handgloves",
+        "videospan",
+        "minimum",
+        "hamburgefonstiv",
+        "Raphesion 123",
+      ];
+
+      // DOM Elements
+      const dropZone = document.getElementById("drop-zone");
+      const fileInput = document.getElementById("font-file");
+      const fontNameDisplay = document.getElementById("font-name");
+      const textInput = document.getElementById("text-input");
+      const btnRender = document.getElementById("btn-render");
+      const btnDownload = document.getElementById("btn-download");
+      const toggleAllLayers = document.getElementById("toggle-all-layers");
+      const svgCanvas = document.getElementById("vector-canvas");
+      const emptyState = document.getElementById("empty-state");
+      const themeToggle = document.getElementById("theme-toggle");
+
+      // Initialize with a random word
+      textInput.value = testWords[Math.floor(Math.random() * testWords.length)];
+
+      // --- Theme Management ---
+      themeToggle.addEventListener("click", () => {
+        document.body.classList.toggle("dark-mode");
+      });
+
+      // --- File Handling ---
+      dropZone.addEventListener("click", () => fileInput.click());
+      dropZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropZone.classList.add("dragover");
+      });
+      dropZone.addEventListener("dragleave", () =>
+        dropZone.classList.remove("dragover"),
+      );
+      dropZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("dragover");
+        if (e.dataTransfer.files.length) {
+          handleFontFile(e.dataTransfer.files[0]);
+        }
+      });
+      fileInput.addEventListener("change", (e) => {
+        if (e.target.files.length) {
+          handleFontFile(e.target.files[0]);
+        }
+      });
+
+      function handleFontFile(file) {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          try {
+            currentFont = opentype.parse(e.target.result);
+            let name = currentFont.names.fontFamily
+              ? currentFont.names.fontFamily.en
+              : file.name;
+            fontNameDisplay.textContent = `Loaded: ${name}`;
+            fontNameDisplay.classList.remove("hidden");
+            renderVectors();
+          } catch (err) {
+            alert(
+              "Error parsing font file. Please ensure it's a valid TTF or OTF.",
+            );
+            console.error(err);
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      }
+
+      // --- Case Toggles ---
+      const caseBtns = {
+        lower: document.getElementById("btn-lower"),
+        sentence: document.getElementById("btn-sentence"),
+        upper: document.getElementById("btn-upper"),
+      };
+
+      function setCase(mode) {
+        Object.values(caseBtns).forEach((b) => b.classList.remove("active"));
+        let val = textInput.value;
+        if (mode === "lower") {
+          textInput.value = val.toLowerCase();
+          caseBtns.lower.classList.add("active");
+        } else if (mode === "upper") {
+          textInput.value = val.toUpperCase();
+          caseBtns.upper.classList.add("active");
+        } else {
+          textInput.value =
+            val.charAt(0).toUpperCase() + val.slice(1).toLowerCase();
+          caseBtns.sentence.classList.add("active");
+        }
+        if (currentFont) renderVectors();
+      }
+
+      caseBtns.lower.addEventListener("click", () => setCase("lower"));
+      caseBtns.upper.addEventListener("click", () => setCase("upper"));
+      caseBtns.sentence.addEventListener("click", () => setCase("sentence"));
+
+      // Re-render on text input
+      textInput.addEventListener("input", () => {
+        if (currentFont) renderVectors();
+      });
+
+      // --- Layer Toggles ---
+      function updateLayerVisibility() {
+        document.querySelectorAll(".layer-toggle input").forEach((checkbox) => {
+          const targetId = `layer-${checkbox.dataset.target}`;
+          const layer = document.getElementById(targetId);
+          if (layer) {
+            if (checkbox.checked) {
+              layer.classList.remove("layer-hidden");
+            } else {
+              layer.classList.add("layer-hidden");
+            }
+          }
+        });
+      }
+
+      // Main CTA Mode Toggle
+      btnRender.addEventListener("click", () => {
+        isVectorMode = !isVectorMode; // Toggle mode state
+
+        if (isVectorMode) {
+          btnRender.textContent = "Preview Fill";
+          document.querySelectorAll(".layer-toggle input").forEach((cb) => {
+            cb.checked = cb.dataset.target !== "fill-preview"; // Turn on vectors, off fill
+          });
+        } else {
+          btnRender.textContent = "Show Vectors";
+          document.querySelectorAll(".layer-toggle input").forEach((cb) => {
+            cb.checked = cb.dataset.target === "fill-preview"; // Turn off vectors, on fill
+          });
+        }
+
+        toggleAllLayers.checked = false; // Reset "Select All" state due to mixed state
+        updateLayerVisibility();
+      });
+
+      // Toggle All check box
+      toggleAllLayers.addEventListener("change", (e) => {
+        const isChecked = e.target.checked;
+        document.querySelectorAll(".layer-toggle input").forEach((cb) => {
+          cb.checked = isChecked;
+        });
+        updateLayerVisibility();
+      });
+
+      // Individual layer checkboxes
+      document.querySelectorAll(".layer-toggle input").forEach((checkbox) => {
+        checkbox.addEventListener("change", () => {
+          updateLayerVisibility();
+        });
+      });
+
+      // Apply initial visibility based on default HTML checked attributes
+      updateLayerVisibility();
+
+      // --- Vector Processing & Rendering ---
+
+      function clearLayer(id) {
+        document.getElementById(id).innerHTML = "";
+      }
+
+      function createSVGElement(tag, attrs) {
+        const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+        for (let k in attrs) el.setAttribute(k, attrs[k]);
+        return el;
+      }
+
+      function getAngleDiff(a1, a2) {
+        let diff = Math.abs(a1 - a2);
+        while (diff > Math.PI + 0.001) diff -= 2 * Math.PI;
+        return Math.abs(diff);
+      }
+
+      function renderVectors() {
+        if (!currentFont) return;
+        const text = textInput.value || " ";
+
+        emptyState.classList.add("hidden");
+        svgCanvas.classList.remove("hidden");
+
+        const layers = [
+          "layer-fill-preview",
+          "layer-sidebearings",
+          "layer-metrics",
+          "layer-outlines",
+          "layer-handle-bars",
+          "layer-off-curve",
+          "layer-smooth-nodes",
+          "layer-tangent-nodes",
+          "layer-corner-nodes",
+        ];
+        layers.forEach(clearLayer);
+
+        const glyphs = currentFont.stringToGlyphs(text);
+        const unitsPerEm = currentFont.unitsPerEm || 1000;
+
+        const nodeRadius = unitsPerEm * 0.012;
+        const offCurveSize = unitsPerEm * 0.008;
+
+        let cursorX = 0;
+        let totalWidth = 0;
+
+        glyphs.forEach((g) => (totalWidth += g.advanceWidth));
+
+        const ascender = currentFont.ascender;
+        const descender = currentFont.descender;
+        const os2 = currentFont.tables.os2 || {};
+        const xHeight = os2.sxHeight || ascender * 0.5;
+        const capHeight = os2.sCapHeight || ascender * 0.8;
+
+        const yMin = descender - unitsPerEm * 0.2;
+        const yMax = ascender + unitsPerEm * 0.2;
+        const vHeight = yMax - yMin;
+
+        svgCanvas.setAttribute(
+          "viewBox",
+          `0 ${-yMax} ${Math.max(totalWidth, 1)} ${vHeight}`,
+        );
+
+        const drawMetric = (yPos, name) => {
+          document.getElementById("layer-metrics").appendChild(
+            createSVGElement("line", {
+              x1: -1000,
+              y1: -yPos,
+              x2: totalWidth + 1000,
+              y2: -yPos,
+            }),
+          );
+        };
+        drawMetric(0, "Baseline");
+        drawMetric(ascender, "Ascender");
+        drawMetric(descender, "Descender");
+        drawMetric(xHeight, "X-Height");
+        drawMetric(capHeight, "Cap-Height");
+
+        glyphs.forEach((glyph) => {
+          const advance = glyph.advanceWidth;
+
+          const lsbLine = createSVGElement("line", {
+            x1: cursorX,
+            y1: -yMax,
+            x2: cursorX,
+            y2: -yMin,
+          });
+          const rsbLine = createSVGElement("line", {
+            x1: cursorX + advance,
+            y1: -yMax,
+            x2: cursorX + advance,
+            y2: -yMin,
+          });
+          document
+            .getElementById("layer-sidebearings")
+            .append(lsbLine, rsbLine);
+
+          const path = glyph.path;
+          let d = "";
+
+          let contours = [];
+          let currentContour = [];
+
+          path.commands.forEach((cmd) => {
+            if (cmd.type === "M") d += ` M ${cmd.x + cursorX} ${-cmd.y}`;
+            else if (cmd.type === "L") d += ` L ${cmd.x + cursorX} ${-cmd.y}`;
+            else if (cmd.type === "C")
+              d += ` C ${cmd.x1 + cursorX} ${-cmd.y1}, ${cmd.x2 + cursorX} ${-cmd.y2}, ${cmd.x + cursorX} ${-cmd.y}`;
+            else if (cmd.type === "Q")
+              d += ` Q ${cmd.x1 + cursorX} ${-cmd.y1}, ${cmd.x + cursorX} ${-cmd.y}`;
+            else if (cmd.type === "Z") d += ` Z`;
+
+            if (cmd.type === "M") {
+              if (currentContour.length > 0) contours.push(currentContour);
+              currentContour = [cmd];
+            } else if (cmd.type === "Z") {
+              currentContour.push(cmd);
+              contours.push(currentContour);
+              currentContour = [];
+            } else {
+              currentContour.push(cmd);
+            }
+          });
+          if (currentContour.length > 0) contours.push(currentContour);
+
+          // Draw outline and fill preview
+          if (d) {
+            const outlinePath = createSVGElement("path", { d: d });
+            document.getElementById("layer-outlines").appendChild(outlinePath);
+
+            const fillPath = createSVGElement("path", { d: d });
+            document.getElementById("layer-fill-preview").appendChild(fillPath);
+          }
+
+          contours.forEach((contour) => {
+            let segments = [];
+            let startPt = null;
+            let curPt = null;
+
+            contour.forEach((cmd) => {
+              let pt = {
+                x: cmd.x !== undefined ? cmd.x + cursorX : 0,
+                y: cmd.y !== undefined ? -cmd.y : 0,
+              };
+
+              if (cmd.type === "M") {
+                startPt = pt;
+                curPt = pt;
+              } else if (cmd.type === "L") {
+                segments.push({
+                  type: "L",
+                  start: curPt,
+                  end: pt,
+                  cpOut: curPt,
+                  cpIn: pt,
+                });
+                curPt = pt;
+              } else if (cmd.type === "C") {
+                let cp1 = { x: cmd.x1 + cursorX, y: -cmd.y1 };
+                let cp2 = { x: cmd.x2 + cursorX, y: -cmd.y2 };
+                segments.push({
+                  type: "C",
+                  start: curPt,
+                  end: pt,
+                  cpOut: cp1,
+                  cpIn: cp2,
+                });
+                curPt = pt;
+              } else if (cmd.type === "Q") {
+                let cp1 = { x: cmd.x1 + cursorX, y: -cmd.y1 };
+                segments.push({
+                  type: "Q",
+                  start: curPt,
+                  end: pt,
+                  cpOut: cp1,
+                  cpIn: cp1,
+                });
+                curPt = pt;
+              } else if (cmd.type === "Z") {
+                if (curPt.x !== startPt.x || curPt.y !== startPt.y) {
+                  segments.push({
+                    type: "L",
+                    start: curPt,
+                    end: startPt,
+                    cpOut: curPt,
+                    cpIn: startPt,
+                  });
+                }
+              }
+            });
+
+            if (segments.length === 0) return;
+
+            const isClosed = contour[contour.length - 1].type === "Z";
+
+            for (let i = 0; i < segments.length; i++) {
+              let segA = segments[i];
+              let segB = segments[(i + 1) % segments.length];
+
+              if (!isClosed && i === segments.length - 1) continue;
+
+              let nodePt = segA.end;
+
+              if (segA.type === "C" || segA.type === "Q") {
+                drawHandleLine(nodePt, segA.cpIn);
+                drawOffCurvePoint(segA.cpIn, offCurveSize);
+              }
+              if (segB.type === "C" || segB.type === "Q") {
+                drawHandleLine(nodePt, segB.cpOut);
+                drawOffCurvePoint(segB.cpOut, offCurveSize);
+              }
+
+              let vIn = {
+                x: nodePt.x - segA.cpIn.x,
+                y: nodePt.y - segA.cpIn.y,
+              };
+              let vOut = {
+                x: segB.cpOut.x - nodePt.x,
+                y: segB.cpOut.y - nodePt.y,
+              };
+
+              if (vIn.x === 0 && vIn.y === 0)
+                vIn = {
+                  x: nodePt.x - segA.start.x,
+                  y: nodePt.y - segA.start.y,
+                };
+              if (vOut.x === 0 && vOut.y === 0)
+                vOut = { x: segB.end.x - nodePt.x, y: segB.end.y - nodePt.y };
+
+              let angleIn = Math.atan2(vIn.y, vIn.x);
+              let angleOut = Math.atan2(vOut.y, vOut.x);
+
+              let angleDiff = getAngleDiff(angleIn, angleOut);
+              let isCollinear =
+                angleDiff < 0.05 || Math.abs(angleDiff - Math.PI * 2) < 0.05;
+
+              let isCurveA = segA.type === "C" || segA.type === "Q";
+              let isCurveB = segB.type === "C" || segB.type === "Q";
+
+              let nodeType = "Corner";
+              let rotationAngle = angleOut;
+
+              if (isCollinear) {
+                if (isCurveA && isCurveB) {
+                  nodeType = "Smooth";
+                } else if (isCurveA || isCurveB) {
+                  nodeType = "Tangent";
+                  rotationAngle = isCurveB ? angleOut : angleIn + Math.PI;
+                }
+              }
+
+              if (nodeType === "Smooth") {
+                document
+                  .getElementById("layer-smooth-nodes")
+                  .appendChild(
+                    createSVGElement("circle", {
+                      cx: nodePt.x,
+                      cy: nodePt.y,
+                      r: nodeRadius,
+                    }),
+                  );
+              } else if (nodeType === "Corner") {
+                document.getElementById("layer-corner-nodes").appendChild(
+                  createSVGElement("rect", {
+                    x: nodePt.x - nodeRadius,
+                    y: nodePt.y - nodeRadius,
+                    width: nodeRadius * 2,
+                    height: nodeRadius * 2,
+                  }),
+                );
+              } else if (nodeType === "Tangent") {
+                const size = nodeRadius * 1.5;
+                const pts = `${size},0 ${-size / 2},${size / 1.2} ${-size / 2},${-size / 1.2}`;
+                const deg = rotationAngle * (180 / Math.PI);
+                const poly = createSVGElement("polygon", { points: pts });
+                poly.setAttribute(
+                  "transform",
+                  `translate(${nodePt.x}, ${nodePt.y}) rotate(${deg})`,
+                );
+                document
+                  .getElementById("layer-tangent-nodes")
+                  .appendChild(poly);
+              }
+            }
+          });
+
+          cursorX += advance;
+        });
+
+        // Reapply visibility logic based on current toggles after regenerating the geometry
+        updateLayerVisibility();
+      }
+
+      function drawHandleLine(pt1, pt2) {
+        document
+          .getElementById("layer-handle-bars")
+          .appendChild(
+            createSVGElement("line", {
+              x1: pt1.x,
+              y1: pt1.y,
+              x2: pt2.x,
+              y2: pt2.y,
+            }),
+          );
+      }
+
+      function drawOffCurvePoint(pt, size) {
+        const d = `M ${pt.x - size} ${pt.y - size} L ${pt.x + size} ${pt.y + size} M ${pt.x - size} ${pt.y + size} L ${pt.x + size} ${pt.y - size}`;
+        document
+          .getElementById("layer-off-curve")
+          .appendChild(createSVGElement("path", { d: d }));
+      }
+
+      // --- Download Feature ---
+      btnDownload.addEventListener("click", () => {
+        if (!currentFont) {
+          alert("Please load a font and render vectors first.");
+          return;
+        }
+        const svgClone = svgCanvas.cloneNode(true);
+        svgClone.classList.remove("hidden");
+
+        // Grab explicit text colors for SVG payload
+        const isDark = document.body.classList.contains("dark-mode");
+        const fillColor = isDark ? "#ffffff" : "#000000";
+        const nodeStrokeColor = "#000000";
+
+        const styleNode = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "style",
+        );
+        styleNode.textContent = `
+                .fill-preview path { fill: ${fillColor}; stroke: none; }
+                .outlines path { fill: none; stroke: ${fillColor}; stroke-width: 1px; vector-effect: non-scaling-stroke; }
+                .smooth-nodes circle { fill: #FFDE21; stroke: ${nodeStrokeColor}; stroke-width: 1px; vector-effect: non-scaling-stroke; }
+                .tangent-nodes polygon { fill: #FFDE21; stroke: ${nodeStrokeColor}; stroke-width: 1px; vector-effect: non-scaling-stroke; }
+                .corner-nodes rect { fill: #FFDE21; stroke: ${nodeStrokeColor}; stroke-width: 1px; vector-effect: non-scaling-stroke; }
+                .handle-bars line { stroke: ${fillColor}; stroke-width: 1px; vector-effect: non-scaling-stroke; opacity: 0.6; }
+                .off-curve path { fill: none; stroke: ${fillColor}; stroke-width: 1px; vector-effect: non-scaling-stroke; }
+                .metrics line { stroke: #999999; stroke-width: 1px; vector-effect: non-scaling-stroke; }
+                .sidebearings line { stroke: #cccccc; stroke-width: 1px; vector-effect: non-scaling-stroke; }
+                .layer-hidden { display: none; }
+            `;
+        svgClone.insertBefore(styleNode, svgClone.firstChild);
+
+        const serializer = new XMLSerializer();
+        const svgString = serializer.serializeToString(svgClone);
+        const blob = new Blob([svgString], {
+          type: "image/svg+xml;charset=utf-8",
+        });
+        const url = URL.createObjectURL(blob);
+
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `vectors_${textInput.value}.svg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      });
+    </script>
+  </body>
+</html>
