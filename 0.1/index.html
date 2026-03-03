@@ -199,11 +199,6 @@
         display: none !important;
       }
 
-      .fill-preview path {
-        fill: var(--text);
-        stroke: none;
-      }
-
       .outlines path {
         fill: none;
         stroke: var(--text);
@@ -315,52 +310,38 @@
       <button id="btn-render" class="btn-primary mb-6">Show Vectors</button>
 
       <div class="input-group">
-        <div class="flex justify-between items-center mb-2">
-          <label class="!mb-0">Layers</label>
-          <label
-            class="text-xs flex items-center cursor-pointer opacity-70 hover:opacity-100 transition-opacity"
-          >
-            <input
-              type="checkbox"
-              id="toggle-all-layers"
-              class="mr-1 accent-[var(--yellow)]"
-            />
-            Toggle All
-          </label>
-        </div>
+        <label>Layers</label>
         <div class="layer-list">
           <label class="layer-toggle"
-            ><input type="checkbox" checked data-target="fill-preview" /> Fill
-            Preview</label
+            ><input type="checkbox" checked data-target="outlines" />
+            Outlines</label
           >
           <label class="layer-toggle"
-            ><input type="checkbox" data-target="outlines" /> Outlines</label
-          >
-          <label class="layer-toggle"
-            ><input type="checkbox" data-target="smooth-nodes" /> Smooth
+            ><input type="checkbox" checked data-target="smooth-nodes" /> Smooth
             Nodes</label
           >
           <label class="layer-toggle"
-            ><input type="checkbox" data-target="tangent-nodes" /> Tangent
+            ><input type="checkbox" checked data-target="tangent-nodes" />
+            Tangent Nodes</label
+          >
+          <label class="layer-toggle"
+            ><input type="checkbox" checked data-target="corner-nodes" /> Corner
             Nodes</label
           >
           <label class="layer-toggle"
-            ><input type="checkbox" data-target="corner-nodes" /> Corner
-            Nodes</label
-          >
-          <label class="layer-toggle"
-            ><input type="checkbox" data-target="handle-bars" /> Handle
+            ><input type="checkbox" checked data-target="handle-bars" /> Handle
             Bars</label
           >
           <label class="layer-toggle"
-            ><input type="checkbox" data-target="off-curve" /> Off-Curve
+            ><input type="checkbox" checked data-target="off-curve" /> Off-Curve
             Points</label
           >
           <label class="layer-toggle"
-            ><input type="checkbox" data-target="metrics" /> Metrics</label
+            ><input type="checkbox" checked data-target="metrics" />
+            Metrics</label
           >
           <label class="layer-toggle"
-            ><input type="checkbox" data-target="sidebearings" />
+            ><input type="checkbox" checked data-target="sidebearings" />
             Sidebearings</label
           >
         </div>
@@ -368,24 +349,6 @@
 
       <div class="mt-auto">
         <button id="btn-download" class="btn-secondary">Download SVG</button>
-
-        <div
-          class="mt-8 pt-4 border-t border-[var(--border)] text-[0.65rem] leading-relaxed opacity-60"
-        >
-          <p class="font-bold mb-1">Type Vectors v0.3</p>
-          <p>
-            Designed by Pedro Amado (FBAUP / i2ADS / Ligatures) and developed by
-            Gemini Pro 3.1 in March 2026.
-          </p>
-          <p class="mt-1">
-            <a
-              href="https://github.com/pedamado/type-vectors"
-              target="_blank"
-              class="underline hover:text-[var(--text)]"
-              >More information</a
-            >
-          </p>
-        </div>
       </div>
     </aside>
 
@@ -396,11 +359,10 @@
       <!-- SVG Canvas -->
       <svg id="vector-canvas" class="hidden" xmlns="http://www.w3.org/2000/svg">
         <!-- Layers will be injected here by JS in order of back to front -->
-        <g id="layer-fill-preview" class="fill-preview"></g>
         <g id="layer-sidebearings" class="sidebearings"></g>
         <g id="layer-metrics" class="metrics"></g>
         <g id="layer-outlines" class="outlines"></g>
-        <g id="layer-handle-bars" class="handle-bars"></g>
+        <g id="layer-handlebars" class="handle-bars"></g>
         <g id="layer-off-curve" class="off-curve"></g>
         <g id="layer-smooth-nodes" class="smooth-nodes"></g>
         <g id="layer-tangent-nodes" class="tangent-nodes"></g>
@@ -412,7 +374,6 @@
       // Data & State
       let currentFont = null;
       let currentText = "adhesion";
-      let isVectorMode = false; // Starts in Fill mode
 
       const testWords = [
         "adhesion",
@@ -431,7 +392,6 @@
       const textInput = document.getElementById("text-input");
       const btnRender = document.getElementById("btn-render");
       const btnDownload = document.getElementById("btn-download");
-      const toggleAllLayers = document.getElementById("toggle-all-layers");
       const svgCanvas = document.getElementById("vector-canvas");
       const emptyState = document.getElementById("empty-state");
       const themeToggle = document.getElementById("theme-toggle");
@@ -519,63 +479,28 @@
       textInput.addEventListener("input", () => {
         if (currentFont) renderVectors();
       });
+      btnRender.addEventListener("click", () => {
+        if (currentFont) renderVectors();
+      });
 
       // --- Layer Toggles ---
-      function updateLayerVisibility() {
-        document.querySelectorAll(".layer-toggle input").forEach((checkbox) => {
-          const targetId = `layer-${checkbox.dataset.target}`;
+      document.querySelectorAll(".layer-toggle input").forEach((checkbox) => {
+        checkbox.addEventListener("change", (e) => {
+          const targetId = `layer-${e.target.dataset.target}`;
           const layer = document.getElementById(targetId);
           if (layer) {
-            if (checkbox.checked) {
+            if (e.target.checked) {
               layer.classList.remove("layer-hidden");
             } else {
               layer.classList.add("layer-hidden");
             }
           }
         });
-      }
-
-      // Main CTA Mode Toggle
-      btnRender.addEventListener("click", () => {
-        isVectorMode = !isVectorMode; // Toggle mode state
-
-        if (isVectorMode) {
-          btnRender.textContent = "Preview Fill";
-          document.querySelectorAll(".layer-toggle input").forEach((cb) => {
-            cb.checked = cb.dataset.target !== "fill-preview"; // Turn on vectors, off fill
-          });
-        } else {
-          btnRender.textContent = "Show Vectors";
-          document.querySelectorAll(".layer-toggle input").forEach((cb) => {
-            cb.checked = cb.dataset.target === "fill-preview"; // Turn off vectors, on fill
-          });
-        }
-
-        toggleAllLayers.checked = false; // Reset "Select All" state due to mixed state
-        updateLayerVisibility();
       });
-
-      // Toggle All check box
-      toggleAllLayers.addEventListener("change", (e) => {
-        const isChecked = e.target.checked;
-        document.querySelectorAll(".layer-toggle input").forEach((cb) => {
-          cb.checked = isChecked;
-        });
-        updateLayerVisibility();
-      });
-
-      // Individual layer checkboxes
-      document.querySelectorAll(".layer-toggle input").forEach((checkbox) => {
-        checkbox.addEventListener("change", () => {
-          updateLayerVisibility();
-        });
-      });
-
-      // Apply initial visibility based on default HTML checked attributes
-      updateLayerVisibility();
 
       // --- Vector Processing & Rendering ---
 
+      // Helper to clear layer
       function clearLayer(id) {
         document.getElementById(id).innerHTML = "";
       }
@@ -596,15 +521,16 @@
         if (!currentFont) return;
         const text = textInput.value || " ";
 
+        // Switch UI
         emptyState.classList.add("hidden");
         svgCanvas.classList.remove("hidden");
 
+        // Clear previous SVG contents
         const layers = [
-          "layer-fill-preview",
           "layer-sidebearings",
           "layer-metrics",
           "layer-outlines",
-          "layer-handle-bars",
+          "layer-handlebars",
           "layer-off-curve",
           "layer-smooth-nodes",
           "layer-tangent-nodes",
@@ -615,30 +541,35 @@
         const glyphs = currentFont.stringToGlyphs(text);
         const unitsPerEm = currentFont.unitsPerEm || 1000;
 
-        // Nodes sizing reduced by 50%
-        const nodeRadius = unitsPerEm * 0.006;
-        const offCurveSize = unitsPerEm * 0.004;
+        // Nodes sizing relative to font units
+        const nodeRadius = unitsPerEm * 0.012;
+        const offCurveSize = unitsPerEm * 0.008;
 
         let cursorX = 0;
         let totalWidth = 0;
 
+        // Calculate total width first to set ViewBox correctly
         glyphs.forEach((g) => (totalWidth += g.advanceWidth));
 
+        // Metrics from font
         const ascender = currentFont.ascender;
         const descender = currentFont.descender;
         const os2 = currentFont.tables.os2 || {};
         const xHeight = os2.sxHeight || ascender * 0.5;
         const capHeight = os2.sCapHeight || ascender * 0.8;
 
+        // Ensure ViewBox encapsulates full height including margins
         const yMin = descender - unitsPerEm * 0.2;
         const yMax = ascender + unitsPerEm * 0.2;
         const vHeight = yMax - yMin;
 
+        // Set SVG viewport (Shrinks to fit horizontally natively)
         svgCanvas.setAttribute(
           "viewBox",
           `0 ${-yMax} ${Math.max(totalWidth, 1)} ${vHeight}`,
         );
 
+        // Draw Metrics Lines
         const drawMetric = (yPos, name) => {
           document.getElementById("layer-metrics").appendChild(
             createSVGElement("line", {
@@ -655,9 +586,11 @@
         drawMetric(xHeight, "X-Height");
         drawMetric(capHeight, "Cap-Height");
 
+        // Process Glyphs
         glyphs.forEach((glyph) => {
           const advance = glyph.advanceWidth;
 
+          // Draw Sidebearings
           const lsbLine = createSVGElement("line", {
             x1: cursorX,
             y1: -yMax,
@@ -674,13 +607,16 @@
             .getElementById("layer-sidebearings")
             .append(lsbLine, rsbLine);
 
+          // Get raw path commands
           const path = glyph.path;
           let d = "";
 
+          // Group commands into contours for node analysis
           let contours = [];
           let currentContour = [];
 
           path.commands.forEach((cmd) => {
+            // Build SVG path data (Flip Y axis by negating Y)
             if (cmd.type === "M") d += ` M ${cmd.x + cursorX} ${-cmd.y}`;
             else if (cmd.type === "L") d += ` L ${cmd.x + cursorX} ${-cmd.y}`;
             else if (cmd.type === "C")
@@ -689,6 +625,7 @@
               d += ` Q ${cmd.x1 + cursorX} ${-cmd.y1}, ${cmd.x + cursorX} ${-cmd.y}`;
             else if (cmd.type === "Z") d += ` Z`;
 
+            // Push to contour logic
             if (cmd.type === "M") {
               if (currentContour.length > 0) contours.push(currentContour);
               currentContour = [cmd];
@@ -702,20 +639,19 @@
           });
           if (currentContour.length > 0) contours.push(currentContour);
 
-          // Draw outline and fill preview
+          // Draw outline
           if (d) {
-            const outlinePath = createSVGElement("path", { d: d });
-            document.getElementById("layer-outlines").appendChild(outlinePath);
-
-            const fillPath = createSVGElement("path", { d: d });
-            document.getElementById("layer-fill-preview").appendChild(fillPath);
+            const pathEl = createSVGElement("path", { d: d });
+            document.getElementById("layer-outlines").appendChild(pathEl);
           }
 
+          // Analyze contours and draw nodes/handles
           contours.forEach((contour) => {
             let segments = [];
             let startPt = null;
             let curPt = null;
 
+            // 1. Convert Opentype Commands into Segments
             contour.forEach((cmd) => {
               let pt = {
                 x: cmd.x !== undefined ? cmd.x + cursorX : 0,
@@ -756,6 +692,7 @@
                 });
                 curPt = pt;
               } else if (cmd.type === "Z") {
+                // If contour doesn't physically end exactly at start, assume a line closes it
                 if (curPt.x !== startPt.x || curPt.y !== startPt.y) {
                   segments.push({
                     type: "L",
@@ -772,23 +709,28 @@
 
             const isClosed = contour[contour.length - 1].type === "Z";
 
+            // 2. Analyze segments to classify nodes
             for (let i = 0; i < segments.length; i++) {
               let segA = segments[i];
               let segB = segments[(i + 1) % segments.length];
 
+              // Skip the connection back to start if it's an open path
               if (!isClosed && i === segments.length - 1) continue;
 
               let nodePt = segA.end;
 
+              // Draw Handles and Off-curves for incoming segment
               if (segA.type === "C" || segA.type === "Q") {
                 drawHandleLine(nodePt, segA.cpIn);
                 drawOffCurvePoint(segA.cpIn, offCurveSize);
               }
+              // Draw Handles and Off-curves for outgoing segment
               if (segB.type === "C" || segB.type === "Q") {
                 drawHandleLine(nodePt, segB.cpOut);
                 drawOffCurvePoint(segB.cpOut, offCurveSize);
               }
 
+              // Vectors defining the incoming and outgoing directions at the node
               let vIn = {
                 x: nodePt.x - segA.cpIn.x,
                 y: nodePt.y - segA.cpIn.y,
@@ -798,6 +740,7 @@
                 y: segB.cpOut.y - nodePt.y,
               };
 
+              // Fallback if control points lie exactly on the node
               if (vIn.x === 0 && vIn.y === 0)
                 vIn = {
                   x: nodePt.x - segA.start.x,
@@ -810,6 +753,7 @@
               let angleOut = Math.atan2(vOut.y, vOut.x);
 
               let angleDiff = getAngleDiff(angleIn, angleOut);
+              // Less than ~3 degrees difference considers the vectors collinear
               let isCollinear =
                 angleDiff < 0.05 || Math.abs(angleDiff - Math.PI * 2) < 0.05;
 
@@ -824,10 +768,12 @@
                   nodeType = "Smooth";
                 } else if (isCurveA || isCurveB) {
                   nodeType = "Tangent";
+                  // Triangle base perpendicular to straight segment, points to curve
                   rotationAngle = isCurveB ? angleOut : angleIn + Math.PI;
                 }
               }
 
+              // Render Node Shape
               if (nodeType === "Smooth") {
                 document
                   .getElementById("layer-smooth-nodes")
@@ -848,6 +794,7 @@
                   }),
                 );
               } else if (nodeType === "Tangent") {
+                // Pointing Triangle
                 const size = nodeRadius * 1.5;
                 const pts = `${size},0 ${-size / 2},${size / 1.2} ${-size / 2},${-size / 1.2}`;
                 const deg = rotationAngle * (180 / Math.PI);
@@ -865,14 +812,12 @@
 
           cursorX += advance;
         });
-
-        // Reapply visibility logic based on current toggles after regenerating the geometry
-        updateLayerVisibility();
       }
 
+      // Helpers for drawing micro features
       function drawHandleLine(pt1, pt2) {
         document
-          .getElementById("layer-handle-bars")
+          .getElementById("layer-handlebars")
           .appendChild(
             createSVGElement("line", {
               x1: pt1.x,
@@ -896,26 +841,22 @@
           alert("Please load a font and render vectors first.");
           return;
         }
+        // Clone the SVG to manipulate for export without affecting display
         const svgClone = svgCanvas.cloneNode(true);
         svgClone.classList.remove("hidden");
 
-        // Grab explicit text colors for SVG payload
-        const isDark = document.body.classList.contains("dark-mode");
-        const fillColor = isDark ? "#ffffff" : "#000000";
-        const nodeStrokeColor = "#000000";
-
+        // Embed CSS directly into the exported SVG to preserve styling independent of HTML
         const styleNode = document.createElementNS(
           "http://www.w3.org/2000/svg",
           "style",
         );
         styleNode.textContent = `
-                .fill-preview path { fill: ${fillColor}; stroke: none; }
-                .outlines path { fill: none; stroke: ${fillColor}; stroke-width: 1px; vector-effect: non-scaling-stroke; }
-                .smooth-nodes circle { fill: #FFDE21; stroke: ${nodeStrokeColor}; stroke-width: 1px; vector-effect: non-scaling-stroke; }
-                .tangent-nodes polygon { fill: #FFDE21; stroke: ${nodeStrokeColor}; stroke-width: 1px; vector-effect: non-scaling-stroke; }
-                .corner-nodes rect { fill: #FFDE21; stroke: ${nodeStrokeColor}; stroke-width: 1px; vector-effect: non-scaling-stroke; }
-                .handle-bars line { stroke: ${fillColor}; stroke-width: 1px; vector-effect: non-scaling-stroke; opacity: 0.6; }
-                .off-curve path { fill: none; stroke: ${fillColor}; stroke-width: 1px; vector-effect: non-scaling-stroke; }
+                .outlines path { fill: none; stroke: black; stroke-width: 1px; vector-effect: non-scaling-stroke; }
+                .smooth-nodes circle { fill: #FFDE21; stroke: black; stroke-width: 1px; vector-effect: non-scaling-stroke; }
+                .tangent-nodes polygon { fill: #FFDE21; stroke: black; stroke-width: 1px; vector-effect: non-scaling-stroke; }
+                .corner-nodes rect { fill: #FFDE21; stroke: black; stroke-width: 1px; vector-effect: non-scaling-stroke; }
+                .handle-bars line { stroke: black; stroke-width: 1px; vector-effect: non-scaling-stroke; opacity: 0.6; }
+                .off-curve path { fill: none; stroke: black; stroke-width: 1px; vector-effect: non-scaling-stroke; }
                 .metrics line { stroke: #999999; stroke-width: 1px; vector-effect: non-scaling-stroke; }
                 .sidebearings line { stroke: #cccccc; stroke-width: 1px; vector-effect: non-scaling-stroke; }
                 .layer-hidden { display: none; }
